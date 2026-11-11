@@ -158,6 +158,11 @@ class FlightEngine {
       } else {
         this.assignment = null;
         this.track = null;
+        this.emit('flight', {
+          licenseNumber:'ENTRENAMIENTO',origin:'LIBRE',destination:'LIBRE',
+          aircraft:'PRUEBA LOCAL',registration:'SIN PIREP',
+          targetFuelLiters:null,targetWeightKg:null
+        });
       }
       this.status(testMode ? 'ENTRENAMIENTO: conectando con MSFS...' : 'Buscando Microsoft Flight Simulator...');
       const { open, Protocol, SimConnectPeriod, SimConnectDataType } = require('node-simconnect');
@@ -283,7 +288,7 @@ class FlightEngine {
     // Evaluación informativa del toque: no modifica PIREP, puntos ni accidentes.
     this.landing.record({at:now,onGround,groundSpeed:speed,verticalSpeed,gForce,
       aglFeet,pitchDeg:Number.isFinite(pitchDegrees)?-pitchDegrees:null,
-      paused:this.simPaused!==false,replay:cameraState===17,slew});
+      paused:this.simPaused===true,replay:cameraState===17,slew});
     if(this.track&&validPosition)this.safety.record({flightId:this.assignment.flightId,
       licenseNumber:this.assignment.licenseNumber,apiBaseUrl:this.settings.apiBaseUrl},safetySample);
     if (this.track && on && !onGround && Number.isFinite(speed) && speed >= 35) {

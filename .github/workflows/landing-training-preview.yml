@@ -1,0 +1,33 @@
+name: AVG ACARS - Entrenamiento aterrizajes sin misión
+on:
+  push:
+    branches:
+      - feature/landing-training-no-mission-20261110
+permissions:
+  contents: write
+jobs:
+  training-preview:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probar seguridad, aterrizajes y entrenamiento libre sin backend
+        shell: pwsh
+        run: |
+          node --test payload/tests/clients.cjs payload/tests/shutdown.cjs payload/tests/landing.cjs payload/tests/training.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Pruebas fallidas.' }
+      - name: Construir paquetes portables MSFS y X-Plane
+        shell: pwsh
+        run: ./scripts/build-safety.ps1
+      - name: Publicar solo PREVIEW, sin cambiar web oficial
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.1.3-landing-training-preview dist/*.zip --repo $env:GITHUB_REPOSITORY --title "AVG ACARS 0.1.3 - Entrenamiento sin misión (PRUEBA)" --notes-file LANDING_TRAINING_PREVIEW.md --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'No se publicó la descarga.' }

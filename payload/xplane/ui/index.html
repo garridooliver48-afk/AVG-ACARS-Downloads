@@ -11,7 +11,7 @@
   <div class="app">
     <header class="topbar">
       <div class="brand"><div class="brandmark">AVG</div><div><strong>Aviación Virtual de Guatemala</strong><span>ACARS · Flight Operations</span></div></div>
-      <div class="version"><span class="live-dot"></span> X-PLANE CLIENT <b>v0.1.2</b></div>
+      <div class="version"><span class="live-dot"></span> X-PLANE CLIENT <b>v0.1.3 · PRUEBA LOCAL</b></div>
     </header>
     <main>
       <div class="heading-row">
@@ -44,6 +44,11 @@
             <div class="route"><div><span>SALIDA</span><b id="origin">----</b></div><div class="route-line"><span class="route-plane">✈</span></div><div class="dest"><span>LLEGADA</span><b id="destination">----</b></div></div>
             <div class="flight-info"><div><span>AERONAVE</span><strong id="aircraft">—</strong></div><div><span>MATRÍCULA</span><strong id="registration">—</strong></div><div><span>COMBUSTIBLE</span><strong id="fuel">—</strong></div><div><span>PESO PREVISTO</span><strong id="weight">—</strong></div></div>
             <div class="actions"><button class="button-secondary" id="portal">Generar vuelo en AVG ↗</button></div>
+            <div class="actions" id="trainingPanel" style="border-top:1px solid rgba(135,157,188,.23);padding-top:12px;margin-top:16px">
+              <button class="button-primary" id="trainingStart">Iniciar prueba de aterrizaje</button>
+              <button class="button-secondary" id="trainingStop" hidden>Detener prueba</button>
+            </div>
+            <p class="hint" id="trainingHint">Prueba libre sin vuelo asignado, sin puntos y sin PIREP. No afecta el generador AVG.</p>
             <div class="auto-connect-hint">● Detección automática: abre X-Plane 11/12 y espera unos segundos.</div>
             <p class="status-message" id="statusMessage">AVG ACARS buscará el simulador automáticamente.</p>
           </div>
@@ -67,7 +72,7 @@
               <div class="metric"><span>DURACIÓN</span><div><strong id="duration">00:00</strong><small>hh:mm</small></div></div>
             </div>
             <div class="coordinates"><span>POSICIÓN</span><code id="coords">Lat — · Lon —</code></div>
-            <div class="engine"><div><span class="engine-dot" id="engineDot"></span><strong id="engineState">Motor detenido</strong></div><span>Envía posiciones cada 5 s</span></div>
+            <div class="engine"><div><span class="engine-dot" id="engineDot"></span><strong id="engineState">Motor detenido</strong></div><span id="telemetryModeLabel">Misión oficial: envía posiciones cada 5 s</span></div>
           </div>
           <div class="panel activity-panel">
             <div class="panel-head"><h2>Actividad del ACARS</h2><span class="mini-tag">LOCAL</span></div>

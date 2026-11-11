@@ -167,6 +167,11 @@ class FlightEngine {
       } else {
         this.assignment = null;
         this.track = null;
+        this.emit('flight', {
+          licenseNumber:'ENTRENAMIENTO',origin:'LIBRE',destination:'LIBRE',
+          aircraft:'PRUEBA LOCAL',registration:'SIN PIREP',
+          targetFuelLiters:null,targetWeightKg:null
+        });
       }
       // Aplicacion exclusiva para X-Plane 11 y 12.
       if (this.track &&

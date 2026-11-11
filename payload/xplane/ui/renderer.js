@@ -7,6 +7,8 @@ let discarding = false;
 let loggingIn = false;
 let pending = null;
 let hasSession = false;
+let trainingActive = false;
+let trainingBusy = false;
 
 function log(text, level = 'info') {
   const events = $('events');
@@ -32,6 +34,10 @@ function updateButtons() {
   $('logout').disabled = loggingIn;
   $('submit').disabled = sending || discarding || !pending;
   $('discard').disabled = sending || discarding || !pending;
+  $('trainingStart').disabled = trainingBusy || trainingActive || Boolean(pending);
+  $('trainingStart').hidden = trainingActive;
+  $('trainingStop').disabled = trainingBusy || !trainingActive;
+  $('trainingStop').hidden = !trainingActive;
 }
 function setAuth(data) {
   hasSession = Boolean(data?.hasToken && !data?.required);
@@ -85,6 +91,10 @@ function updateStatus(data) {
 
   connected = isConnected;
   connecting = isConnecting;
+  if(trainingActive && connected){
+    $('statusShort').textContent = 'ENTRENAMIENTO';
+    $('simState').textContent = 'PRUEBA LOCAL';
+  }
   updateButtons();
 }
 function updateFlight(f) {
@@ -105,7 +115,8 @@ function updateTelemetry(t) {
   $('duration').textContent = t ? fmtTime(t.durationSeconds) : '00:00';
   $('coords').textContent = t && t.latitude != null && t.longitude != null ? `Lat ${t.latitude.toFixed(5)} · Lon ${t.longitude.toFixed(5)}` : 'Lat — · Lon —';
   $('speedFill').style.width = `${Math.min(100, Math.max(0, (t?.groundSpeed || 0) / 300 * 100))}%`;
-  $('engineState').textContent = t?.enginesRunning ? 'Motor encendido · registrando' : 'Motor detenido';
+  $('engineState').textContent = t?.enginesRunning ?
+    (trainingActive?'Motor encendido · entrenamiento local':'Motor encendido · registrando') : 'Motor detenido';
   $('engineDot').classList.toggle('on', Boolean(t?.enginesRunning));
 }
 
@@ -128,6 +139,40 @@ $('password').addEventListener('keydown', event => { if (event.key === 'Enter') 
 $('logout').addEventListener('click', async () => {
   try { setAuth(await window.avg.logout()); log('Sesión cerrada.', 'ok'); }
   catch (err) { showError(err); }
+});
+function updateTraining(data){
+  trainingActive=Boolean(data?.enabled);
+  $('trainingHint').textContent=trainingActive
+    ? 'ENTRENAMIENTO LOCAL ACTIVO: no registra vuelos, accidentes, posiciones ni puntos.'
+    : 'Prueba libre sin vuelo asignado, sin puntos y sin PIREP. No afecta el generador AVG.';
+  $('telemetryModeLabel').textContent=trainingActive
+    ? 'Modo local: no envía ninguna posición a AVG'
+    : 'Misión oficial: envía posiciones cada 5 s';
+  if(trainingActive){
+    $('statusShort').textContent='ENTRENAMIENTO';
+    $('simState').textContent='PRUEBA LOCAL';
+  }
+  updateButtons();
+}
+$('trainingStart').addEventListener('click', async ()=>{
+  if(trainingBusy)return;
+  trainingBusy=true;updateButtons();
+  try{
+    const result=await window.avg.startTraining();
+    updateTraining(result);
+    log('Conexión local de entrenamiento activada. Practica el aterrizaje sin misión AVG.','ok');
+  }catch(err){showError(err);}
+  finally{trainingBusy=false;updateButtons();}
+});
+$('trainingStop').addEventListener('click',async()=>{
+  if(trainingBusy)return;
+  trainingBusy=true;updateButtons();
+  try{
+    const result=await window.avg.stopTraining();
+    updateTraining(result);
+    log('Prueba finalizada. Reinicia ACARS para volver a una misión oficial.','ok');
+  }catch(err){showError(err);}
+  finally{trainingBusy=false;updateButtons();}
 });
 $('portal').addEventListener('click', async () => { try { await window.avg.openPortal(); } catch (err) { showError(err); } });
 $('submit').addEventListener('click', async () => {
@@ -157,6 +202,7 @@ window.avg.onEvent((event, payload) => {
   else if (event === 'telemetry') updateTelemetry(payload);
   else if (event === 'message') log(payload.text, payload.level);
   else if (event === 'pending') showPending(payload);
+  else if (event === 'training') updateTraining(payload);
   else if (event === 'auth') {
     if (payload?.required) { setAuth({ hasToken: false }); log('Vuelve a iniciar sesión para conectar AVG ACARS.', 'error'); }
     else setAuth(payload);
@@ -165,5 +211,6 @@ window.avg.onEvent((event, payload) => {
 window.avg.getInitial().then(data => {
   setAuth(data);
   showPending(data.pending);
+  updateTraining({enabled:data.trainingMode});
   updateStatus({ state: 'idle', label: data.hasToken ? 'Esperando vuelo asignado y X-Plane...' : 'Inicia sesión con tu cuenta AVG.' });
 }).catch(showError);

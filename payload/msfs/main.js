@@ -317,6 +317,7 @@ function bindIpc() {
   ipcMain.handle('avg:getInitial', () => ({
     ...publicConfig(),
     pending,
+    trainingMode: engine?.testMode === true,
   }));
 
   // ----------------------------------------
@@ -522,6 +523,36 @@ function bindIpc() {
     send('auth', data);
 
     return data;
+  });
+
+  // ----------------------------------------
+  // ENTRENAMIENTO DE ATERRIZAJES (SIN CUENTA / SIN PIREP)
+  // ----------------------------------------
+  ipcMain.handle('avg:startTraining', async () => {
+    if (!engine) throw new Error('ACARS no está preparado.');
+    if (engine.testMode) return { enabled:true };
+    if (pending || engine.track || engine.reportBusy || engine.autoSending) {
+      throw new Error('Hay una misión o PIREP pendiente. No se puede iniciar entrenamiento.');
+    }
+    // Desconectar la sesión de misión, incluso los reintentos; no cerrar la cuenta.
+    engine.stopAuto();
+    try {
+      await engine.connect(null, { testMode:true });
+      send('training', {enabled:true});
+      send('message', {level:'ok',text:'ENTRENAMIENTO ACTIVO: sin misión, sin radar y sin PIREP.'});
+      return { enabled:true };
+    } catch (error) {
+      send('training', {enabled:false});
+      throw error;
+    }
+  });
+  ipcMain.handle('avg:stopTraining', () => {
+    if (engine?.testMode) engine.stopAuto();
+    send('training', {enabled:false});
+    send('flight', {licenseNumber:'SIN ASIGNAR',origin:'----',destination:'----',
+      aircraft:'—',registration:'—',targetFuelLiters:null,targetWeightKg:null});
+    send('status', {state:'idle',label:'Prueba terminada. Para activar misiones oficiales, reinicia AVG ACARS.'});
+    return {enabled:false};
   });
 
   // ----------------------------------------
