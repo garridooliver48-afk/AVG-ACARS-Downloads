@@ -77,7 +77,7 @@ foreach ($entry in $entries) {
   & node $asarCli pack $extractedApp $newAsar --unpack-dir node_modules
   if ($LASTEXITCODE -ne 0) { throw "No se pudo generar app.asar ($($entry.kind))" }
   $listing=& node $asarCli list $newAsar
-  if ($LASTEXITCODE -ne 0 -or -not ($listing | Select-String -Pattern 'lib/safety-recorder.js') -or
+  if ($LASTEXITCODE -ne 0 -or -not ($listing | Select-String -Pattern 'safety-recorder[.]js') -or
       -not ($listing | Select-String -Pattern 'main.js')) {
     throw "El app.asar nuevo no pasó la verificación: $($entry.kind)"
   }
