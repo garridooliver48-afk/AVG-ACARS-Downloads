@@ -32,6 +32,7 @@ class FlightEngine {
     this.assignment = null;
     this.settings = null;
     this.track = null;
+    this.testMode = false; // Entrenamiento local: nunca crea vuelo, PIREP o llamada al servidor.
     this.pingBusy = false;
     this.reportBusy = false;
     this.lastUiAt = 0;
@@ -119,14 +120,16 @@ class FlightEngine {
     if (disconnect && this.state !== 'idle') this.disconnect();
   }
 
-  async connect(settings, { automatic = false } = {}) {
+  async connect(settings, { automatic = false, testMode = false } = {}) {
     if (this.state !== 'idle') throw new Error('El ACARS ya se está conectando o está conectado.');
-    if (this.getPending()) throw new Error('Tienes un PIREP pendiente. Revísalo antes de iniciar otro vuelo.');
+    if (!testMode && this.getPending()) throw new Error('Tienes un PIREP pendiente. Revísalo antes de iniciar otro vuelo.');
     this.state = 'connecting';
-    this.settings = settings;
+    this.testMode = testMode === true;
+    this.settings = testMode ? null : settings;
     const sid = ++this.sessionId;
-    this.status('Consultando vuelo asignado en AVG...');
+    this.status(testMode ? 'ENTRENAMIENTO: buscando simulador sin vuelo AVG...' : 'Consultando vuelo asignado en AVG...');
     try {
+      if (!testMode) {
       const response = await this.request(settings.apiBaseUrl, settings.token, '/api/flights/live?mine=1');
       const flight = response.data;
       if (!flight.flightId || !flight.licenseNumber || !flight.aircraft || !flight.origin || !flight.destination) {
@@ -152,7 +155,11 @@ class FlightEngine {
         targetWeightKg: flight.targetWeightKg ?? null,
       };
       this.emit('flight', this.assignment);
-      this.status('Buscando Microsoft Flight Simulator...');
+      } else {
+        this.assignment = null;
+        this.track = null;
+      }
+      this.status(testMode ? 'ENTRENAMIENTO: conectando con MSFS...' : 'Buscando Microsoft Flight Simulator...');
       const { open, Protocol, SimConnectPeriod, SimConnectDataType } = require('node-simconnect');
       const { recvOpen, handle } = await open('AVG ACARS', Protocol.FSX_SP2);
       if (sid !== this.sessionId) { try { handle.close?.(); } catch {} return; }
@@ -200,7 +207,7 @@ class FlightEngine {
       handle.subscribeToSystemEvent(7102,'Crashed');
       handle.subscribeToSystemEvent(7103,'PositionChanged');
       this.state = 'connected';
-      this.status(`Conectado a ${this.simName}`, 'ok');
+      this.status(testMode ? `ENTRENAMIENTO LOCAL · ${this.simName} · SIN PIREP` : `Conectado a ${this.simName}`, 'ok');
       handle.requestDataOnSimObject(1, 1, 0, SimConnectPeriod.SIM_FRAME);
       return this.assignment;
     } catch (err) {
@@ -228,8 +235,14 @@ class FlightEngine {
 
   onSimDisconnected(sid) {
     if (sid !== this.sessionId || this.state === 'idle') return;
+    const training = this.testMode;
     const interrupted = Boolean(this.track);
     this.disconnect({ silent: true, preserveTrack: interrupted });
+    if (training) {
+      this.status('Entrenamiento detenido: MSFS desconectado. No se envió ningún dato a AVG.');
+      this.emit('training', { enabled: false });
+      return;
+    }
     this.status(interrupted
       ? 'MSFS desconectado. Reintentando; no se enviará PIREP automáticamente.'
       : 'MSFS desconectado. Esperando reconexión automática...');
@@ -255,7 +268,7 @@ class FlightEngine {
     const on = combustion1 > 0 || combustion2 > 0;
     const now = Date.now();
     const validPosition = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
-    if (on && !this.track && !this.getPending()) {
+    if (!this.testMode && on && !this.track && !this.getPending()) {
       this.track = { flightId: this.assignment.flightId, reportId: randomUUID(), startedAt: now,
         lastPosition: null, distanceKm: 0, hadEngineOn: true, hadAirborne: false };
       this.stopCandidateAt = null;
@@ -411,6 +424,7 @@ class FlightEngine {
   disconnect({ silent = false, preserveTrack = false } = {}) {
     this.safety.reset();
     this.landing.reset();
+    this.testMode = false;
     ++this.sessionId;
     const handle = this.handle;
     this.handle = null;
