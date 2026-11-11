@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>AVG ACARS</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><div class="brandmark">AVG</div><div><strong>Aviación Virtual de Guatemala</strong><span>ACARS · Flight Operations</span></div></div>
+      <div class="version"><span class="live-dot"></span> X-PLANE CLIENT <b>v0.1.2</b></div>
+    </header>
+    <main>
+      <div class="heading-row">
+        <div><p class="eyebrow">CENTRO DE OPERACIONES / AVG ACARS</p><h1>Panel de vuelo</h1><p class="subhead">Conexión con X-Plane 11 y 12 y el servidor AVG.</p></div>
+        <div class="connection" id="statusPill"><span class="pulse-dot"></span><span id="statusShort">Sin conexión</span></div>
+      </div>
+      <div class="layout">
+        <section class="left">
+          <details class="panel" id="configPanel">
+            <summary class="panel-head" style="cursor:pointer"><h2><span class="small-icon">01</span> Cuenta AVG</h2><span class="mini-tag" id="accountTag">INGRESAR</span></summary>
+            <div id="loginFields">
+              <label for="email">Correo electrónico</label>
+              <input id="email" type="email" autocomplete="username" placeholder="tu-correo@ejemplo.com">
+              <label for="password">Contraseña</label>
+              <input id="password" type="password" autocomplete="current-password" placeholder="Tu contraseña de AVG">
+              <details class="advanced">
+                <summary>Servidor (solo configuración)</summary>
+                <label for="url">Dirección de AVG</label>
+                <input id="url" type="url" autocomplete="off" spellcheck="false" value="http://127.0.0.1:3000">
+              </details>
+              <div class="actions"><button class="button-primary" id="login">Iniciar sesión</button></div>
+            </div>
+            <div id="signedInFields" hidden>
+              <p class="hint" id="accountEmail">Cuenta conectada.</p>
+              <button class="button-secondary" id="logout">Cerrar sesión</button>
+            </div>
+          </details>
+          <div class="panel flight-panel">
+            <div class="panel-head"><h2><span class="small-icon">02</span> Vuelo asignado</h2><span class="mini-tag" id="pilotLicense">SIN ASIGNAR</span></div>
+            <div class="route"><div><span>SALIDA</span><b id="origin">----</b></div><div class="route-line"><span class="route-plane">✈</span></div><div class="dest"><span>LLEGADA</span><b id="destination">----</b></div></div>
+            <div class="flight-info"><div><span>AERONAVE</span><strong id="aircraft">—</strong></div><div><span>MATRÍCULA</span><strong id="registration">—</strong></div><div><span>COMBUSTIBLE</span><strong id="fuel">—</strong></div><div><span>PESO PREVISTO</span><strong id="weight">—</strong></div></div>
+            <div class="actions"><button class="button-secondary" id="portal">Generar vuelo en AVG ↗</button></div>
+            <div class="auto-connect-hint">● Detección automática: abre X-Plane 11/12 y espera unos segundos.</div>
+            <p class="status-message" id="statusMessage">AVG ACARS buscará el simulador automáticamente.</p>
+          </div>
+          <div class="panel report-panel" id="reportPanel" hidden>
+            <div class="panel-head"><h2><span class="small-icon">03</span> PIREP pendiente</h2><span class="mini-tag warning">REVISIÓN</span></div>
+            <p class="report-description">El motor se apagó. Tu PIREP <b>NO</b> se ha enviado. Revísalo antes de confirmar.</p>
+            <div class="report-values"><span id="reportRoute">----</span><b id="reportMetrics">—</b></div>
+            <button class="button-primary full" id="submit">Revisar y enviar PIREP</button>
+            <div class="actions"><button class="button-secondary full" id="discard">Descartar PIREP de prueba</button></div>
+            <p class="hint">Si falla Internet, el reporte permanecerá guardado en este equipo para reintentarlo.</p>
+          </div>
+        </section>
+        <section class="right">
+          <div class="panel telemetry-panel">
+            <div class="panel-head"><h2><span class="small-icon">●</span> Telemetría en directo</h2><span class="mini-tag" id="simState">X-Plane DESCONECTADO</span></div>
+            <div class="hero-speed"><span>GROUND SPEED</span><div><b id="speed">---</b><small>kt</small></div><div class="speed-progress"><span id="speedFill"></span></div></div>
+            <div class="metrics">
+              <div class="metric"><span>ALTITUD</span><div><strong id="altitude">---</strong><small>ft</small></div></div>
+              <div class="metric"><span>RUMBO</span><div><strong id="heading">---</strong><small>°</small></div></div>
+              <div class="metric"><span>DISTANCIA</span><div><strong id="distance">0.0</strong><small>km</small></div></div>
+              <div class="metric"><span>DURACIÓN</span><div><strong id="duration">00:00</strong><small>hh:mm</small></div></div>
+            </div>
+            <div class="coordinates"><span>POSICIÓN</span><code id="coords">Lat — · Lon —</code></div>
+            <div class="engine"><div><span class="engine-dot" id="engineDot"></span><strong id="engineState">Motor detenido</strong></div><span>Envía posiciones cada 5 s</span></div>
+          </div>
+          <div class="panel activity-panel">
+            <div class="panel-head"><h2>Actividad del ACARS</h2><span class="mini-tag">LOCAL</span></div>
+            <div class="events" id="events" aria-live="polite"><div class="event"><span class="event-time">—</span><p>Inicia sesión una vez para activar la conexión automática.</p></div></div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <footer><span>AVG · X-Plane 11/12 · UDP RREF</span><span>Seguridad 1.1 · Evidencia automática de anomalías</span></footer>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

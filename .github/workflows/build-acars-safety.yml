@@ -1,0 +1,33 @@
+name: AVG ACARS Seguridad 1.2 - paquetes portables
+on:
+  push:
+    branches:
+      - release/acars-seguridad-20261110
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probar cierre y detección de incidentes
+        shell: pwsh
+        run: |
+          node --test payload/tests/clients.cjs payload/tests/shutdown.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Pruebas fallidas.' }
+      - name: Generar programas portables
+        shell: pwsh
+        run: ./scripts/build-safety.ps1
+      - name: Publicar tres descargas
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.1.2-seguridad-1.2 dist/*.zip --repo $env:GITHUB_REPOSITORY --title "AVG ACARS 0.1.2 - Seguridad 1.2 (MSFS y X-Plane)" --notes-file RELEASE_NOTES.md --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'No se publicó la descarga.' }

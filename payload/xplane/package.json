@@ -1,0 +1,7 @@
+{
+  "name": "avg-acars-xplane",
+  "version": "0.1.2",
+  "private": true,
+  "description": "AVG ACARS - cliente de escritorio para MSFS 2020",
+  "main": "main.js"
+}
