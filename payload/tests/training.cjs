@@ -58,7 +58,7 @@ test('X-Plane: entrenamiento con telemetría real, sin cuenta AVG ni PIREP',asyn
   const land=events.find(([n,p])=>n==='notification'&&p.type==='landing');
   assert.ok(land,'Debe emitir resultado al tocar pista');
   assert.equal(land[1].verticalSpeedFpm,-50);
-  assert.equal(land[1].verdict,'BUTTER!');
+  assert.equal(land[1].verdict,'¡DE SEDA!');
   assert.equal(eng.track,null);
   assert.equal(requests.length,0);assert.equal(pireps.length,0);assert.equal(safety.length,0);
  }finally{eng.disconnect({silent:true});Date.now=oldNow;}

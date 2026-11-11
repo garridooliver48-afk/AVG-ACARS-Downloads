@@ -195,6 +195,7 @@ function showOverlay(payload) {
       gForce: Number.isFinite(payload.gForce) ? payload.gForce : null,
       noseRateDegSec: Number.isFinite(payload.noseRateDegSec) ? payload.noseRateDegSec : null,
       floatSeconds: Number.isFinite(payload.floatSeconds) ? payload.floatSeconds : null,
+      floatEstimated: payload.floatEstimated === true,
       verdict: String(payload.verdict || 'LANDING').slice(0, 35)
     } : {}),
   });

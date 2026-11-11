@@ -8,10 +8,10 @@ window.avgOverlay.listen((payload)=>{
  $('standard').hidden=isLanding;
  $('landing').hidden=!isLanding;
  if(isLanding){
-   $('landing-metrics').textContent='Vertical Speed: '+num(payload.verticalSpeedFpm,2)+' FPM / '+num(payload.gForce,2)+' G';
-   $('landing-detail').textContent=detail||'Touchdown recorded';
-   $('landing-nose').textContent='Nose: '+num(payload.noseRateDegSec,2)+' deg/sec | Float: '+(Number.isFinite(payload.floatSeconds)?'~'+payload.floatSeconds.toFixed(1):'—')+' secs';
-   $('landing-verdict').textContent=payload.verdict||'LANDING';
+   $('landing-metrics').textContent='Velocidad vertical: '+num(payload.verticalSpeedFpm,2)+' pies/min | Fuerza G: '+num(payload.gForce,2);
+   $('landing-detail').textContent=detail||'Contacto registrado';
+   $('landing-nose').textContent='Morro: '+num(payload.noseRateDegSec,2)+' °/s | Flotación est.: '+(Number.isFinite(payload.floatSeconds)?'≈'+payload.floatSeconds.toFixed(1)+' s':'—');
+   $('landing-verdict').textContent=payload.verdict||'ATERRIZAJE';
  }else{
    $('title').textContent=title;
    $('detail').textContent=detail;

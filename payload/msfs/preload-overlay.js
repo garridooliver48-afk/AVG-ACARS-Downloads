@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('avgOverlay', {
      gForce:payload.gForce,
      noseRateDegSec:payload.noseRateDegSec,
      floatSeconds:payload.floatSeconds,
+     floatEstimated:payload.floatEstimated === true,
      verdict:String(payload.verdict||'LANDING').slice(0,35)
     }:{})
    });

@@ -1,0 +1,44 @@
+name: AVG ACARS - Evaluador aterrizajes en espanol (PRUEBA)
+on:
+  push:
+    branches:
+      - feature/landing-spanish-feedback-20261110
+permissions:
+  contents: write
+jobs:
+  crear-version-de-prueba:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Obtener codigo
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probar seguridad, cierre, entrenador y aterrizajes
+        shell: pwsh
+        run: |
+          node --test payload/tests/clients.cjs payload/tests/shutdown.cjs payload/tests/landing.cjs payload/tests/training.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Pruebas automaticas fallidas.' }
+      - name: Construir ambos ACARS completos en Windows
+        shell: pwsh
+        run: ./scripts/build-safety.ps1
+      - name: Dar nombres claros a los ZIP
+        shell: pwsh
+        run: |
+          Rename-Item -LiteralPath 'dist/AVG_ACARS_MSFS_Seguridad_1_2.zip' -NewName 'AVG_ACARS_MSFS_Aterrizajes_Espanol_Prueba.zip'
+          Rename-Item -LiteralPath 'dist/AVG_ACARS_XPlane_Seguridad_1_2.zip' -NewName 'AVG_ACARS_XPlane_Aterrizajes_Espanol_Prueba.zip'
+          Rename-Item -LiteralPath 'dist/AVG_ACARS_COMPLETOS_MSFS_XPlane_Seguridad_1_2.zip' -NewName 'AVG_ACARS_Ambos_Aterrizajes_Espanol_Prueba.zip'
+          $zips = @(Get-ChildItem dist -Filter '*.zip')
+          if ($zips.Count -ne 3) { throw 'Faltan paquetes.' }
+          foreach ($z in $zips) {
+            if ($z.Length -lt 20MB) { throw 'ZIP incompleto: ' + $z.Name }
+          }
+      - name: Publicar solo vista previa sin cambiar web oficial
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.1.3-aterrizajes-es-preview dist/*.zip --repo $env:GITHUB_REPOSITORY --title 'AVG ACARS 0.1.3 - Evaluacion de aterrizajes en espanol (PRUEBA)' --notes-file ATERRIZAJES_ESPANOL.md --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'No se logro publicar la vista previa.' }
