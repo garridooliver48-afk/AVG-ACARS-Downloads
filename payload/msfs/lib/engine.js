@@ -1,6 +1,7 @@
 'use strict';
 const { randomUUID } = require('node:crypto');
 const { SafetyRecorder } = require('./safety-recorder');
+const { LandingAnalyzer } = require('./landing-analyzer');
 const { haversineKm, requestAvg } = require('./network');
 
 const PING_EVERY_MS = 5_000;
@@ -17,6 +18,7 @@ class FlightEngine {
   constructor({ emit, recordSafety = () => {}, getPending, savePending, clearPending, request = requestAvg, autoPirep = false }) {
     this.emit = emit;
     this.safety = new SafetyRecorder(recordSafety, 'msfs');
+    this.landing = new LandingAnalyzer(data => this.emit('notification', data));
     this.request = request;
     this.autoPirep = autoPirep;
     this.stopCandidateAt = null;
@@ -177,6 +179,8 @@ class FlightEngine {
       handle.addToDataDefinition(1, 'VERTICAL SPEED', 'Feet per minute', SimConnectDataType.FLOAT64);
       handle.addToDataDefinition(1, 'IS SLEW ACTIVE', 'Bool', SimConnectDataType.INT32);
       handle.addToDataDefinition(1, 'CAMERA STATE', 'Enum', SimConnectDataType.INT32);
+      handle.addToDataDefinition(1, 'PLANE ALT ABOVE GROUND', 'Feet', SimConnectDataType.FLOAT64);
+      handle.addToDataDefinition(1, 'PLANE PITCH DEGREES', 'Degrees', SimConnectDataType.FLOAT64);
       this.simPaused = null;
       this.lastSafetySample = null;
       handle.on('event', event => {
@@ -246,6 +250,8 @@ class FlightEngine {
     const verticalSpeed=recv.data.readFloat64();
     const slew=recv.data.readInt32()>0;
     const cameraState=recv.data.readInt32();
+    const aglFeet=recv.data.readFloat64();
+    const pitchDegrees=recv.data.readFloat64();
     const on = combustion1 > 0 || combustion2 > 0;
     const now = Date.now();
     const validPosition = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
@@ -261,6 +267,10 @@ class FlightEngine {
       gForce,bank,verticalSpeed,slew,paused:this.simPaused!==false,replay:cameraState===17,
       safetyReady:this.simPaused!==null&&[gForce,bank,verticalSpeed].every(Number.isFinite)};
     this.lastSafetySample=safetySample;
+    // Evaluación informativa del toque: no modifica PIREP, puntos ni accidentes.
+    this.landing.record({at:now,onGround,groundSpeed:speed,verticalSpeed,gForce,
+      aglFeet,pitchDeg:Number.isFinite(pitchDegrees)?-pitchDegrees:null,
+      paused:this.simPaused!==false,replay:cameraState===17,slew});
     if(this.track&&validPosition)this.safety.record({flightId:this.assignment.flightId,
       licenseNumber:this.assignment.licenseNumber,apiBaseUrl:this.settings.apiBaseUrl},safetySample);
     if (this.track && on && !onGround && Number.isFinite(speed) && speed >= 35) {
@@ -400,6 +410,7 @@ class FlightEngine {
 
   disconnect({ silent = false, preserveTrack = false } = {}) {
     this.safety.reset();
+    this.landing.reset();
     ++this.sessionId;
     const handle = this.handle;
     this.handle = null;

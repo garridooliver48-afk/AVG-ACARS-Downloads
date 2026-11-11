@@ -2,6 +2,13 @@
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>AVG ACARS · notificación</title><link rel="stylesheet" href="overlay.css"></head>
-<body><main id="notice" class="notice"><div class="brand">AVG <span id="kind">●</span></div>
-<div class="content"><strong id="title">AVG ACARS</strong><span id="detail">Notificación de vuelo</span></div></main>
-<script src="overlay.js"></script></body></html>
+<body><main id="notice" class="notice">
+<div id="standard" class="standard"><div class="brand">AVG <span id="kind">●</span></div>
+<div class="content"><strong id="title">AVG ACARS</strong><span id="detail">Notificación de vuelo</span></div></div>
+<div id="landing" class="landing-content" hidden>
+<div id="landing-metrics">Vertical Speed: — FPM / — G</div>
+<div id="landing-detail">Touchdown recorded</div>
+<div id="landing-nose">Nose: — deg/sec | Float: — secs</div>
+<strong id="landing-verdict">AVG LANDING</strong>
+</div>
+</main><script src="overlay.js"></script></body></html>

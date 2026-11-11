@@ -1,6 +1,7 @@
 'use strict';
 const { randomUUID } = require('node:crypto');
 const { SafetyRecorder } = require('./safety-recorder');
+const { LandingAnalyzer } = require('./landing-analyzer');
 const { haversineKm, requestAvg } = require('./network');
 const { probeXPlane } = require('./xplane-probe');
 
@@ -18,6 +19,7 @@ class FlightEngine {
   constructor({ emit, recordSafety = () => {}, getPending, savePending, clearPending, request = requestAvg, autoPirep = false, probeXPlaneImpl = probeXPlane }) {
     this.emit = emit;
     this.safety = new SafetyRecorder(recordSafety, 'xplane');
+    this.landing = new LandingAnalyzer(data => this.emit('notification', data));
     this.request = request;
     this.probeXPlane = probeXPlaneImpl;
     this.autoPirep = autoPirep;
@@ -344,6 +346,11 @@ class FlightEngine {
       this.emit('message', { level: 'ok', text: `Motor encendido. Vuelo de ${leg} iniciado.` });
       this.emit('notification', { type: 'start', title: 'MOTOR ENCENDIDO', detail: `Vuelo de ${leg} iniciado` });
     }
+    this.landing.record({at:now,onGround,groundSpeed:speed,verticalSpeed:safety.verticalSpeed,
+      gForce:safety.gForce,aglFeet:safety.aglFeet,pitchDeg:safety.pitchDeg,
+      pitchRateDegSec:safety.pitchRateDegSec,paused:safety.paused===true,
+      replay:safety.replay===true,slew:safety.slew===true,
+      crashDetected:safety.crashDetected===true});
     if(this.track && validPosition)this.safety.record({flightId:this.assignment.flightId,
       licenseNumber:this.assignment.licenseNumber,apiBaseUrl:this.settings.apiBaseUrl},
       {at:now,latitude:lat,longitude:lon,altitude:alt,groundSpeed:speed,onGround,
@@ -487,6 +494,7 @@ class FlightEngine {
 
   disconnect({ silent = false, preserveTrack = false } = {}) {
     this.safety.reset();
+    this.landing.reset();
     ++this.sessionId;
     const handle = this.handle;
     this.handle = null;

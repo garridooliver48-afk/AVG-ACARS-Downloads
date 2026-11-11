@@ -169,6 +169,11 @@ function drainOverlay() {
   if (!overlayReady || overlayShowing || !overlayWin || overlayWin.isDestroyed()) return;
   const payload = overlayQueue.shift();
   if (!payload) return;
+  const landing = payload.type === 'landing';
+  const w = landing ? 535 : 385;
+  overlayWin.setSize(w, landing ? 162 : 92);
+  const screenArea = screen.getPrimaryDisplay().workArea;
+  overlayWin.setPosition(Math.round(screenArea.x+(screenArea.width-w)/2),screenArea.y+22);
   overlayShowing = true;
   overlayWin.webContents.send('avg:overlay', payload);
   overlayWin.showInactive();
@@ -176,15 +181,22 @@ function drainOverlay() {
     if (overlayWin && !overlayWin.isDestroyed()) overlayWin.hide();
     overlayShowing = false;
     drainOverlay();
-  }, 4_000);
+  }, payload.type === 'landing' ? 7_000 : 4_000);
 }
 
 function showOverlay(payload) {
-  if (!payload || !['start', 'complete', 'ready'].includes(payload.type)) return;
+  if (!payload || !['start', 'complete', 'ready', 'landing'].includes(payload.type)) return;
   overlayQueue.push({
     type: payload.type,
     title: String(payload.title || '').slice(0, 55),
     detail: String(payload.detail || '').slice(0, 110),
+    ...(payload.type === 'landing' ? {
+      verticalSpeedFpm: Number.isFinite(payload.verticalSpeedFpm) ? payload.verticalSpeedFpm : null,
+      gForce: Number.isFinite(payload.gForce) ? payload.gForce : null,
+      noseRateDegSec: Number.isFinite(payload.noseRateDegSec) ? payload.noseRateDegSec : null,
+      floatSeconds: Number.isFinite(payload.floatSeconds) ? payload.floatSeconds : null,
+      verdict: String(payload.verdict || 'LANDING').slice(0, 35)
+    } : {}),
   });
   if (overlayQueue.length > 4) overlayQueue.shift();
   drainOverlay();

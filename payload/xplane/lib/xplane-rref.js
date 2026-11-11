@@ -20,7 +20,11 @@ const DATAREFS = Object.freeze([
   'sim/time/paused',
   'sim/operation/prefs/replay_mode',
   'sim/operation/override/override_planepath[0]',
-  'sim/flightmodel2/misc/has_crashed'
+  'sim/flightmodel2/misc/has_crashed',
+  // Optional touchdown metrics, appended to keep all existing RREF indices stable.
+  'sim/flightmodel/position/y_agl',
+  'sim/flightmodel/position/theta',
+  'sim/flightmodel/position/Q'
 ]);
 
 const METERS_TO_FEET = 3.280839895;
@@ -117,7 +121,10 @@ function normalizeTelemetry(values) {
     gForce: values.get(10), bank: values.get(11), verticalSpeed: values.get(12),
     paused: values.get(13)>0.5, replay: values.get(14)!==0 && Number.isFinite(values.get(14)),
     slew: values.get(15)>0.5,
-    ...(Number.isFinite(values.get(16))?{crashDetected:values.get(16)>0.5}:{})
+    ...(Number.isFinite(values.get(16))?{crashDetected:values.get(16)>0.5}:{}),
+    ...(Number.isFinite(values.get(17))?{aglFeet:values.get(17)*METERS_TO_FEET}:{}),
+    ...(Number.isFinite(values.get(18))?{pitchDeg:values.get(18)}:{}),
+    ...(Number.isFinite(values.get(19))?{pitchRateDegSec:values.get(19)}:{})
   };
 }
 

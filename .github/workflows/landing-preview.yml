@@ -1,0 +1,33 @@
+name: AVG ACARS - Landing Feedback PREVIEW
+on:
+  push:
+    branches:
+      - feature/landing-overlay-20261110
+permissions:
+  contents: write
+jobs:
+  preview:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probar PIREP, seguridad, cierre y aterrizajes
+        shell: pwsh
+        run: |
+          node --test payload/tests/clients.cjs payload/tests/shutdown.cjs payload/tests/landing.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Pruebas unitarias fallidas.' }
+      - name: Generar ambas carpetas completas
+        shell: pwsh
+        run: ./scripts/build-safety.ps1
+      - name: Publicar únicamente vista previa sin modificar las descargas oficiales
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.1.3-landing-preview dist/*.zip --repo $env:GITHUB_REPOSITORY --title "AVG ACARS 0.1.3 - Landing Feedback (PRUEBAS)" --notes-file LANDING_PREVIEW.md --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'Fallo publicación de la versión de prueba.' }

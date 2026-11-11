@@ -25,7 +25,9 @@ test('RREF: opcionales ausentes conservan posición; campos de seguridad usan su
  assert.equal(normalizeTelemetry(m).safetyReady,false);
  [3,25,-950,0,0,0,1].forEach((v,i)=>m.set(10+i,v));
  const s=normalizeTelemetry(m);assert.equal(s.safetyReady,true);assert.equal(s.verticalSpeed,-950);
- assert.equal(s.crashDetected,true);assert.equal(s.onGround,false);assert.equal(DATAREFS.length,17);
+ assert.equal(s.crashDetected,true);assert.equal(s.onGround,false);assert.equal(DATAREFS.length,20);
+  m.set(17,5);m.set(18,3);m.set(19,-1.25);
+  const landing=normalizeTelemetry(m);assert.ok(Math.abs(landing.aglFeet-16.4042)<0.01);assert.equal(landing.pitchDeg,3);assert.equal(landing.pitchRateDegSec,-1.25);
 });
 test('grabador: persistir antes de marcar; un evento por vuelo; no depende del PIREP',()=>{
  const events=[];let fail=true;const r=new SafetyRecorder(e=>{if(fail)throw Error('disk');events.push(e);},'xplane');
