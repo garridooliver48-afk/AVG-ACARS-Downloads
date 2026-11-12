@@ -1,0 +1,82 @@
+name: Publicar AVG ACARS 0.1.4 MSFS 2020 - descarga publica
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'release/msfs2020/**'
+      - '.github/workflows/publicar-acars-msfs2020.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  construir-y-publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Obtener componentes
+        uses: actions/checkout@v4
+      - name: Descargar ejecutable MSFS oficial anterior
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/base"
+          curl --fail --location --retry 4 --retry-delay 3 \
+            --output "$RUNNER_TEMP/old.zip" \
+            'https://github.com/garridooliver48-afk/AVG-ACARS-Downloads/releases/download/v0.1.2-seguridad-1.2/AVG_ACARS_MSFS_Seguridad_1_2.zip'
+          unzip -q "$RUNNER_TEMP/old.zip" -d "$RUNNER_TEMP/base"
+          EXE="$(find "$RUNNER_TEMP/base" -name 'AVG ACARS.exe' -type f -print -quit)"
+          ASAR="$(find "$RUNNER_TEMP/base" -path '*/resources/app.asar' -type f -print -quit)"
+          test -n "$EXE" && test -n "$ASAR"
+          echo '154fec9c64bd8b107bb8ca5f2d9f2df38a7b66bd19fe504c8c9e44d30420fd24  '"$EXE" | sha256sum --check
+          echo "AVG_ASAR=$ASAR" >> "$GITHUB_ENV"
+      - name: Incorporar y verificar motor actualizado de MSFS 2020
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat release/msfs2020/asar.parts/part-*.b64 | base64 --decode | gzip -dc > "$AVG_ASAR"
+          echo '51ce9c84616271fb476d9fe87f7cc11970bc85ed5e924a4991ce8082884eb31a  '"$AVG_ASAR" | sha256sum --check
+          cp release/msfs2020/Actualizar_AVG_ACARS.ps1 "$RUNNER_TEMP/base/Actualizar_AVG_ACARS.ps1"
+          cp release/msfs2020/ACTUALIZAR_AVG_ACARS.cmd "$RUNNER_TEMP/base/ACTUALIZAR_AVG_ACARS.cmd"
+          cat > "$RUNNER_TEMP/base/LEEME_ACTUALIZACION_0.1.4.txt" <<'EOF'
+          AVG ACARS MSFS 2020 - v0.1.4
+          1. Cierra completamente el AVG ACARS anterior.
+          2. Extrae todos los archivos de este ZIP.
+          3. Ejecuta ACTUALIZAR_AVG_ACARS.cmd.
+          4. Abre el MISMO acceso directo de siempre.
+          No desinstales ni borres la carpeta de AppData de AVG.
+          El actualizador reemplaza el ASAR interno, verifica su SHA256
+          y deja un respaldo del archivo anterior.
+          El EXE original y los PIREP se conservan.
+          Solo para Microsoft Flight Simulator 2020. No modificar X-Plane.
+          EOF
+      - name: Empaquetar ZIP y comprobar que contiene el motor nuevo
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$GITHUB_WORKSPACE/AVG_ACARS_MSFS2020_ATERRIZAJES_SEGURIDAD_20261112.zip"
+          cd "$RUNNER_TEMP/base"
+          zip -qr -9 "$FILE" .
+          unzip -t "$FILE" | tail -1
+          ASAR_PATH="$(unzip -Z -1 "$FILE" | grep -E '(^|/)resources/app\.asar$' | head -n 1)"
+          test -n "$ASAR_PATH"
+          ACTUAL_HASH="$(unzip -p "$FILE" "$ASAR_PATH" | sha256sum | awk '{print $1}')"
+          test "$ACTUAL_HASH" = '51ce9c84616271fb476d9fe87f7cc11970bc85ed5e924a4991ce8082884eb31a'
+          unzip -Z -1 "$FILE" | grep -q 'ACTUALIZAR_AVG_ACARS.cmd'
+          unzip -Z -1 "$FILE" | grep -q 'Actualizar_AVG_ACARS.ps1'
+          sha256sum "$FILE"
+      - name: Publicar Release PUBLICO para pilotos AVG
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG='v0.1.4-msfs2020-aterrizajes-20261112'
+          ZIP='AVG_ACARS_MSFS2020_ATERRIZAJES_SEGURIDAD_20261112.zip'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" \
+              --title 'AVG ACARS MSFS 2020 v0.1.4 - Aterrizajes y Seguridad' \
+              --notes 'Actualizacion publica de AVG ACARS para MSFS 2020. Extraer ZIP y ejecutar ACTUALIZAR_AVG_ACARS.cmd para reemplazar la instalacion actual sin crear otra copia. Conserva acceso directo, configuracion y PIREP. X-Plane no se modifica.' \
+              --latest
+          fi
