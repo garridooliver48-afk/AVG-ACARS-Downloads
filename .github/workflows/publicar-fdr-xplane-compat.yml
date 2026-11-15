@@ -1,0 +1,105 @@
+name: AVG FDR X-Plane - compatibilidad ampliada
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publicar-fdr-xplane-compat.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - shell: powershell
+        run: |
+          $tokens=$null; $errors=$null
+          $null=[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'release/fdr/Actualizar_XPlane_Compatible.ps1').Path,[ref]$tokens,[ref]$errors)
+          if ($errors.Count -gt 0) { $errors | Format-List; throw 'PowerShell parser failed' }
+  package:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Verificar y conservar cada compilación previa
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/update" "$RUNNER_TEMP/out"
+          npm install --prefix "$RUNNER_TEMP/asar-tool" --no-save --no-audit @electron/asar@3.4.1
+          export CLI="$RUNNER_TEMP/asar-tool/node_modules/.bin/asar"
+          export OUT="$RUNNER_TEMP/update"
+          cat > "$RUNNER_TEMP/bases.txt" <<'EOF'
+          stable v0.1.2-seguridad-1.2 AVG_ACARS_XPlane_Seguridad_1_2.zip 9f69b65d6743c71832136e153878bc86c644cc369739584a0d573108f599baf4
+          spanish v0.1.3-aterrizajes-es-preview AVG_ACARS_XPlane_Aterrizajes_Espanol_Prueba.zip bd672aee607ba50b405960d6488ad4675c3dbd83905e1ebcb8455285d305b0d2
+          landing v0.1.3-landing-preview AVG_ACARS_XPlane_Seguridad_1_2.zip 4fd5793c33a4354ee119aab725cf44c867c72a1fb226cc844954753913ae6381
+          training v0.1.3-landing-training-preview AVG_ACARS_XPlane_Seguridad_1_2.zip 1051135df76cde04b974677b21f2e3f5b0a8223f0c5d9cc6a7bae0df02561eb5
+          EOF
+          : > "$RUNNER_TEMP/manifest.tsv"
+          while read -r label tag file hash; do
+            base="$RUNNER_TEMP/$label"; mkdir -p "$base"
+            curl -fL --retry 3 "https://github.com/garridooliver48-afk/AVG-ACARS-Downloads/releases/download/$tag/$file" -o "$base/base.zip"
+            echo "$hash  $base/base.zip" | sha256sum -c -
+            unzip -q "$base/base.zip" -d "$base/unpacked"
+            ASAR="$(find "$base/unpacked" -type f -name app.asar -print -quit)"
+            test -n "$ASAR"
+            APPDIR="$(dirname "$(dirname "$ASAR")")"
+            mapfile -t EXES < <(find "$APPDIR" -maxdepth 1 -type f -iname '*.exe' ! -iname '*uninstall*' ! -iname '*crashpad*' ! -iname 'elevate.exe')
+            test "${#EXES[@]}" = 1
+            EXE="${EXES[0]}"
+            old="$(sha256sum "$ASAR" | cut -d ' ' -f1)"
+            exe="$(sha256sum "$EXE" | cut -d ' ' -f1)"
+            "$CLI" extract "$ASAR" "$base/app"
+            if ! node release/fdr/patch-client.mjs "$base/app" xplane; then
+              echo "::warning::No se pudo parchear sin alterar funciones de $label; se excluye esta compilación."
+              if [ "$label" = stable ]; then exit 1; fi
+              continue
+            fi
+            for f in main.js lib/engine.js lib/simulator-capture.js lib/safety-recorder.js lib/safety-outbox.js lib/xplane-rref.js; do node --check "$base/app/$f"; done
+            "$CLI" pack "$base/app" "$OUT/app-$label.asar"
+            new="$(sha256sum "$OUT/app-$label.asar" | cut -d ' ' -f1)"
+            printf '%s\t%s\t%s\t%s\t%s\n' "$label" "$exe" "$old" "$new" "app-$label.asar" >> "$RUNNER_TEMP/manifest.tsv"
+            echo "Verified $label $old -> $new"
+          done < "$RUNNER_TEMP/bases.txt"
+          # Preserve exact existing official FDR binaries and add the two known test bases.
+          curl -fL --retry 3 'https://github.com/garridooliver48-afk/AVG-ACARS-Downloads/releases/download/v0.1.3-fdr-xplane/AVG_ACARS_FDR_XPlane_ACTUALIZACION.zip' -o "$RUNNER_TEMP/current.zip"
+          echo 'fc624a8db2876879dd21d9a6ecd32f5d1c94ae582505c3112ccf4d6c4713cbb2  '"$RUNNER_TEMP/current.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/current.zip" -d "$RUNNER_TEMP/current"
+          exe="$(tr -d '\r\n' < "$RUNNER_TEMP/current/original-exe.sha256")"
+          new="$(tr -d '\r\n' < "$RUNNER_TEMP/current/new-asar.sha256")"
+          echo "$new  $RUNNER_TEMP/current/app.asar" | sha256sum -c -
+          cp "$RUNNER_TEMP/current/app.asar" "$OUT/app-official.asar"
+          for old in "$new" 5129cbbe07a0c11725ade67bee785109ee95c73df6d7a37c0b266b6b50a8bd7c d6c473d6e63a44e47b22b4cd8981a2f2a8828f90fc4afa3db2012578fd8bf21a; do
+            printf '%s\t%s\t%s\t%s\t%s\n' official "$exe" "$old" "$new" app-official.asar >> "$RUNNER_TEMP/manifest.tsv"
+          done
+          python3 - <<'PY'
+          import os,json
+          tmp=os.environ['RUNNER_TEMP']; out=os.environ['OUT']
+          rows=[dict(zip(['label','exe','old','new','file'],line.rstrip('\n').split('\t'))) for line in open(tmp+'/manifest.tsv')]
+          assert len(rows)>=4
+          assert all(len(r['exe'])==len(r['old'])==len(r['new'])==64 for r in rows)
+          assert all(os.path.isfile(out+'/'+r['file']) for r in rows)
+          with open(out+'/versiones.json','w') as f: json.dump(rows,f,indent=2)
+          print('Bases verificadas:', [r['label'] for r in rows])
+          PY
+          cp release/fdr/Actualizar_XPlane_Compatible.ps1 "$OUT/"
+          printf '%s\r\n' '@echo off' 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Actualizar_XPlane_Compatible.ps1"' 'pause' > "$OUT/ACTUALIZAR_AVG_FDR.cmd"
+          printf '%s\n' 'AVG FDR X-Plane - compatibilidad ampliada' 'Cierra ACARS, extrae este ZIP, ejecuta ACTUALIZAR_AVG_FDR.cmd y selecciona el EXE habitual. Conserva el acceso directo, la configuracion y un respaldo. Si tu compilacion sigue sin reconocerse, conserva el ACARS anterior y descarga el paquete completo oficial.' > "$OUT/LEEME.txt"
+          (cd "$OUT" && zip -qr -9 "$RUNNER_TEMP/out/AVG_ACARS_FDR_XPlane_ACTUALIZACION_COMPATIBLE.zip" .)
+          unzip -tq "$RUNNER_TEMP/out/AVG_ACARS_FDR_XPlane_ACTUALIZACION_COMPATIBLE.zip"
+          cp "$OUT/versiones.json" "$RUNNER_TEMP/out/versiones.json"
+      - name: Publicar nueva actualización X-Plane
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create v0.1.3-fdr-xplane-compat "$RUNNER_TEMP/out/"* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'AVG ACARS FDR X-Plane - compatibilidad ampliada' --notes 'Actualizador que identifica compilaciones comprobadas mediante hashes del EXE y ASAR, conserva sus funciones y crea respaldo. No modifica versiones desconocidas.' --latest=false
