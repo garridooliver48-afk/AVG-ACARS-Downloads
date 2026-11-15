@@ -1,0 +1,104 @@
+name: AVG ACARS - FDR oficial
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publicar-fdr-oficial.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validar PowerShell 5.1
+        shell: powershell
+        run: |
+          $tokens=$null
+          $errors=$null
+          $null=[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'release/fdr/Actualizar_AVG_FDR.ps1').Path,[ref]$tokens,[ref]$errors)
+          if ($errors.Count -gt 0) { $errors | Format-List; throw 'PowerShell parser failed' }
+  release:
+    needs: validate-windows
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sim: msfs
+            label: MSFS2020
+            version: v0.1.5-fdr-msfs2020
+            base: https://github.com/garridooliver48-afk/AVG-ACARS-Downloads/releases/download/v0.1.4-msfs2020-aterrizajes-20261112/AVG_ACARS_MSFS2020_ATERRIZAJES_SEGURIDAD_20261112.zip
+            hash: 47e958adaf6a35fd174e43c49a57eeb3c707eb8f15a163fdce0fd424b84b7a09
+            compatible1: de1a09b11201f83e3887b9152cdd2b1e13e09f08aee92db5d4ffd104813d1686
+            compatible2: 8a8c3b3be77174d365633fc11664aed9af4a53fea7a5a0f26c4327747a0020c9
+          - sim: xplane
+            label: XPlane
+            version: v0.1.3-fdr-xplane
+            base: https://github.com/garridooliver48-afk/AVG-ACARS-Downloads/releases/download/v0.1.2-seguridad-1.2/AVG_ACARS_XPlane_Seguridad_1_2.zip
+            hash: 9f69b65d6743c71832136e153878bc86c644cc369739584a0d573108f599baf4
+            compatible1: 5129cbbe07a0c11725ade67bee785109ee95c73df6d7a37c0b266b6b50a8bd7c
+            compatible2: d6c473d6e63a44e47b22b4cd8981a2f2a8828f90fc4afa3db2012578fd8bf21a
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Crear paquete completo y actualizador
+        env:
+          SIM: ${{ matrix.sim }}
+          LABEL: ${{ matrix.label }}
+          BASE: ${{ matrix.base }}
+          HASH: ${{ matrix.hash }}
+          COMPAT1: ${{ matrix.compatible1 }}
+          COMPAT2: ${{ matrix.compatible2 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/base" "$RUNNER_TEMP/update" "$RUNNER_TEMP/out"
+          curl -fL --retry 3 "$BASE" -o "$RUNNER_TEMP/base.zip"
+          echo "$HASH  $RUNNER_TEMP/base.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/base.zip" -d "$RUNNER_TEMP/base"
+          ASAR="$(find "$RUNNER_TEMP/base" -type f -name app.asar -print -quit)"
+          test -n "$ASAR"
+          APPDIR="$(dirname "$(dirname "$ASAR")")"
+          mapfile -t EXES < <(find "$APPDIR" -maxdepth 1 -type f -iname '*.exe' ! -iname '*uninstall*' ! -iname '*crashpad*' ! -iname 'elevate.exe')
+          test "${#EXES[@]}" = 1
+          EXE="${EXES[0]}"
+          sha256sum "$ASAR" | cut -d ' ' -f1 > "$RUNNER_TEMP/update/original-asar.sha256"
+          sha256sum "$EXE" | cut -d ' ' -f1 > "$RUNNER_TEMP/update/original-exe.sha256"
+          npm install --prefix "$RUNNER_TEMP/asar-tool" --no-save --no-audit @electron/asar@3.4.1
+          CLI="$RUNNER_TEMP/asar-tool/node_modules/.bin/asar"
+          "$CLI" extract "$ASAR" "$RUNNER_TEMP/app"
+          node release/fdr/patch-client.mjs "$RUNNER_TEMP/app" "$SIM"
+          for f in main.js lib/engine.js lib/simulator-capture.js lib/safety-recorder.js lib/safety-outbox.js; do node --check "$RUNNER_TEMP/app/$f"; done
+          if [ "$SIM" = xplane ]; then node --check "$RUNNER_TEMP/app/lib/xplane-rref.js"; fi
+          "$CLI" pack "$RUNNER_TEMP/app" "$RUNNER_TEMP/update/app.asar"
+          sha256sum "$RUNNER_TEMP/update/app.asar" | cut -d ' ' -f1 > "$RUNNER_TEMP/update/new-asar.sha256"
+          printf '%s\n' "$COMPAT1" "$COMPAT2" > "$RUNNER_TEMP/update/compatible-asar.sha256"
+          cp release/fdr/Actualizar_AVG_FDR.ps1 "$RUNNER_TEMP/update/"
+          printf '%s\r\n' '@echo off' 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Actualizar_AVG_FDR.ps1"' 'pause' > "$RUNNER_TEMP/update/ACTUALIZAR_AVG_FDR.cmd"
+          printf '%s\n' 'AVG FDR - actualizacion oficial' 'Cierra AVG ACARS, extrae todo este ZIP, ejecuta ACTUALIZAR_AVG_FDR.cmd y selecciona tu EXE habitual. Conserva el acceso directo y la configuracion; se crea un respaldo del ASAR. Si la version no coincide, no fuerces la instalacion y contacta a AVG.' 'Consentimiento opcional por sesion: hasta dos capturas de la ventana identificada del simulador al detectar un incidente. Las consultan el piloto afectado, AVG-001 y AVG-002. No se envian otras ventanas ni el escritorio.' > "$RUNNER_TEMP/update/LEEME.txt"
+          cp "$RUNNER_TEMP/update/app.asar" "$ASAR"
+          echo "$(cat "$RUNNER_TEMP/update/new-asar.sha256")  $ASAR" | sha256sum -c -
+          echo "$(cat "$RUNNER_TEMP/update/original-exe.sha256")  $EXE" | sha256sum -c -
+          # El paquete completo contiene la aplicacion portatil actualizada, no el actualizador antiguo.
+          (cd "$APPDIR" && zip -qr -5 "$RUNNER_TEMP/out/AVG_ACARS_FDR_${LABEL}_COMPLETO.zip" .)
+          (cd "$RUNNER_TEMP/update" && zip -qr -9 "$RUNNER_TEMP/out/AVG_ACARS_FDR_${LABEL}_ACTUALIZACION.zip" .)
+          for f in "$RUNNER_TEMP/out/"*.zip; do unzip -tq "$f"; done
+          (cd "$RUNNER_TEMP/out" && sha256sum *.zip > SHA256_${LABEL}.txt)
+      - name: Publicar release nueva sin sobrescribir versiones anteriores
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ matrix.version }}
+          LABEL: ${{ matrix.label }}
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" >/dev/null 2>&1; then echo 'La version ya existe: no se sobrescribe.'; exit 1; fi
+          gh release create "$VERSION" "$RUNNER_TEMP/out/"* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "AVG ACARS FDR - $LABEL" --notes "Actualizacion oficial de caja negra AVG. Incluye paquete completo y actualizador en sitio con respaldo. Capturas opcionales del simulador, telemetria ampliada e informe PDF. El piloto afectado, AVG-001 y AVG-002 pueden consultar la evidencia. Solo AVG-001 aprueba reparaciones y cobros. MSFS 2024 no validado." --latest=false
